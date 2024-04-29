@@ -66,6 +66,41 @@
     return target;
   }
 
+  function _slicedToArray(arr, i) {
+    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+  }
+
+  function _arrayWithHoles(arr) {
+    if (Array.isArray(arr)) return arr;
+  }
+
+  function _iterableToArrayLimit(arr, i) {
+    if (typeof Symbol === "undefined" || !(Symbol.iterator in Object(arr))) return;
+    var _arr = [];
+    var _n = true;
+    var _d = false;
+    var _e = undefined;
+
+    try {
+      for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) {
+        _arr.push(_s.value);
+
+        if (i && _arr.length === i) break;
+      }
+    } catch (err) {
+      _d = true;
+      _e = err;
+    } finally {
+      try {
+        if (!_n && _i["return"] != null) _i["return"]();
+      } finally {
+        if (_d) throw _e;
+      }
+    }
+
+    return _arr;
+  }
+
   function _unsupportedIterableToArray(o, minLen) {
     if (!o) return;
     if (typeof o === "string") return _arrayLikeToArray(o, minLen);
@@ -81,6 +116,10 @@
     for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
 
     return arr2;
+  }
+
+  function _nonIterableRest() {
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
 
   function _createForOfIteratorHelper(o, allowArrayLike) {
@@ -4650,7 +4689,10 @@
         elevation: "Elevation",
         segment_length: "Segment length",
         type: "Type",
-        legend: "Legend"
+        legend: "Legend",
+        selection_ascend: "Total ascend",
+        selection_descend: "Total descend",
+        selection_dist: "Selected distance"
       },
       _init_options: function _init_options() {
         this._margin = this.options.margins;
@@ -5178,7 +5220,13 @@
 
         this._focusBlockDistance = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 3 * textDistance).attr("id", "heightgraph.blockdistance").text(this._getTranslation('segment_length') + ':'); // text line 4
 
-        this._focusType = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 4 * textDistance).attr("id", "heightgraph.type").text(this._getTranslation('type') + ':');
+        this._focusType = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 4 * textDistance).attr("id", "heightgraph.type").text(this._getTranslation('type') + ':'); // text line 5
+
+        this._focusSelectionAscend = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 5 * textDistance).attr("id", "heightgraph.select_asc").text(this._getTranslation('selection_ascend') + ':'); // text line 6
+
+        this._focusSelectionDescend = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 6 * textDistance).attr("id", "heightgraph.select_desc").text(this._getTranslation('selection_descend') + ':'); // text line 7
+
+        this._focusSelectionDistance = this._focus.append("text").attr("x", 7).attr("y", -this._y(boxPosition) + 7 * textDistance).attr("id", "heightgraph.select_dist").text(this._getTranslation('selection_dist') + ':');
         this._areaTspan = this._focusBlockDistance.append('tspan').attr("class", "tspan");
         this._typeTspan = this._focusType.append('tspan').attr("class", "tspan");
 
@@ -5189,6 +5237,9 @@
         this._focusLine = this._focusLineGroup.append("line").attr("y1", 0).attr("y2", this._y(this._elevationBounds.min));
         this._distTspan = this._focusDistance.append('tspan').attr("class", "tspan");
         this._altTspan = this._focusHeight.append('tspan').attr("class", "tspan");
+        this._selAscTspan = this._focusSelectionAscend.append('tspan').attr("class", "tspan");
+        this._selDescTspan = this._focusSelectionDescend.append('tspan').attr("class", "tspan");
+        this._selDistTspan = this._focusSelectionDistance.append('tspan').attr("class", "tspan");
       },
 
       /**
@@ -5647,24 +5698,28 @@
         } // initialize the vars for the closest item calculation
 
 
-        var closestItem = null; // large enough to be trumped by any point on the chart
+        var closestItem = null;
+        var closestItemIx = -1; // large enough to be trumped by any point on the chart
 
         var closestDistance = 2 * Math.pow(100, 2); // consider a good enough match if the given point (lat and lng) is within
         // 1.1 meters of a point on the chart (there are 111,111 meters in a degree)
 
         var exactMatchRounding = 1.1 / 111111;
 
-        var _iterator2 = _createForOfIteratorHelper(this._areasFlattended),
+        var _iterator2 = _createForOfIteratorHelper(this._areasFlattended.entries()),
             _step2;
 
         try {
           for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
-            var item = _step2.value;
+            var _step2$value = _slicedToArray(_step2.value, 2),
+                ix = _step2$value[0],
+                item = _step2$value[1];
+
             var latDiff = event.latlng.lat - item.latlng.lat;
             var lngDiff = event.latlng.lng - item.latlng.lng; // first check for an almost exact match; it's simple and avoid further calculations
 
             if (Math.abs(latDiff) < exactMatchRounding && Math.abs(lngDiff) < exactMatchRounding) {
-              this._internalMousemoveHandler(item, showMapMarker);
+              this._internalMousemoveHandler(item, ix, showMapMarker);
 
               break;
             } // calculate the squared distance from the current to the given;
@@ -5675,6 +5730,7 @@
 
             if (distance < closestDistance) {
               closestItem = item;
+              closestItemIx = ix;
               closestDistance = distance;
             }
           }
@@ -5684,7 +5740,7 @@
           _iterator2.f();
         }
 
-        if (closestItem) this._internalMousemoveHandler(closestItem, showMapMarker);
+        if (closestItem) this._internalMousemoveHandler(closestItem, closestItemIx, showMapMarker);
       },
 
       /*
@@ -5693,16 +5749,17 @@
       _mousemoveHandler: function _mousemoveHandler(d, i, ctx) {
         var coords = mouse(this._svg.node());
 
-        var item = this._areasFlattended[this._findItemForX(coords[0])];
+        var ix = this._findItemForX(coords[0]);
 
-        if (item) this._internalMousemoveHandler(item);
+        var item = this._areasFlattended[ix];
+        if (item) this._internalMousemoveHandler(item, ix);
       },
 
       /*
        * Handles the mouseover, given the current item the mouse is over
        */
-      _internalMousemoveHandler: function _internalMousemoveHandler(item) {
-        var showMapMarker = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+      _internalMousemoveHandler: function _internalMousemoveHandler(item, ix) {
+        var showMapMarker = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
         var areaLength;
         var alt = this._defined(item) ? item.altitude : '-',
             dist = item.position,
@@ -5719,6 +5776,40 @@
 
         if (showMapMarker) {
           this._showMapMarker(ll, alt, type);
+        }
+
+        if (this._dragStartCoords) {
+          console.log("Currently dragging");
+
+          var ix1 = this._findItemForX(this._dragStartCoords[0]);
+
+          var _this$_cumulatedValue = this._cumulatedValues(ix1, ix),
+              _this$_cumulatedValue2 = _slicedToArray(_this$_cumulatedValue, 3),
+              dst = _this$_cumulatedValue2[0],
+              ascend = _this$_cumulatedValue2[1],
+              descend = _this$_cumulatedValue2[2];
+
+          this._focusSelectionAscend.style("display", "block");
+
+          this._focusSelectionDescend.style("display", "block");
+
+          this._focusSelectionDistance.style("display", "block");
+
+          this._selAscTspan.text(" " + ascend.toFixed(1) + " m");
+
+          this._selDescTspan.text(" " + descend.toFixed(1) + " m");
+
+          this._selDistTspan.text(" " + (dst / 1000.0).toFixed(1) + " km");
+
+          this._focusRect.attr("height", 7 * 15 + 5);
+        } else if (!this._dragRectangle) {
+          this._focusSelectionAscend.style("display", "none");
+
+          this._focusSelectionDescend.style("display", "none");
+
+          this._focusSelectionDistance.style("display", "none");
+
+          this._focusRect.attr("height", 4 * 15 + 5);
         }
 
         this._distTspan.text(" " + dist.toFixed(1) + ' km');
@@ -5743,6 +5834,67 @@
         if (this._x(dist) + boxWidth > totalWidth) {
           this._focus.style("display", "initial").attr("transform", "translate(" + xPositionBox + "," + this._y(this._elevationBounds.min) + ")");
         }
+      },
+      _cumulatedValues: function _cumulatedValues(ix1, ix2) {
+        // To avoid unneccessary recalculations for minimal changes, the previous calculation is returned
+        // if the previous calculation is less than 300ms old, and if the selection has changed by less than 5 segments.
+        if (this._prev_cumulation) {
+          if (Math.abs(this._prev_cumulation[0] - Math.abs(ix1 - ix2)) < 5 && Date.now() - this._prev_cumulation[1] < 300) {
+            return this._prev_cumulation[2];
+          }
+        }
+
+        var prev = null;
+        var dst = 0.0;
+        var ascend = 0.0;
+        var descend = 0.0; // Cumulated height difference over a short segment
+
+        var delta_hd = 0.0; // Cumulated distance for the short segment
+
+        var delta_dst = 0.0;
+
+        for (var ix = Math.min(ix1, ix2); ix <= Math.max(ix1, ix2); ix++) {
+          var item = this._areasFlattended[ix];
+
+          if (!prev) {
+            prev = item;
+            continue;
+          }
+
+          var single_dst = prev.latlng.distanceTo(item.latlng); // 
+
+          delta_dst += single_dst;
+          dst += single_dst;
+          var hdiff = item.altitude - prev.altitude;
+          delta_hd += hdiff;
+          var abs_hd = Math.abs(delta_hd);
+          prev = item; // To correct for small fluctuations, only absolute height differences of 10 meters or more are 
+          // taken into account. If the distance is too small (<12m), only height differences of 15 meters or more
+          // are taken into account.
+
+          if (delta_dst < 12 && abs_hd < 15 || abs_hd < 10) {
+            continue;
+          }
+
+          if (delta_hd > 0) {
+            ascend += delta_hd;
+          } else {
+            descend += -delta_hd;
+          }
+
+          delta_hd = 0.0;
+          delta_dst = 0.0;
+        }
+
+        if (delta_hd > 0) {
+          ascend += delta_hd;
+        } else {
+          descend += -delta_hd;
+        }
+
+        var vals = [dst, ascend, descend];
+        this._prev_cumulation = [Math.abs(ix1 - ix2), Date.now(), vals];
+        return vals;
       },
 
       /*
